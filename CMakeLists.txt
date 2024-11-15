@@ -20,6 +20,7 @@ add_executable(usb_screen
         ${CMAKE_CURRENT_LIST_DIR}/main.c
         ${CMAKE_CURRENT_LIST_DIR}/lcd.c
         ${CMAKE_CURRENT_LIST_DIR}/disk.c
+        ${CMAKE_CURRENT_LIST_DIR}/usb_drive.c
         )
 
 # Include freertos

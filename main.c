@@ -15,41 +15,41 @@
 #include "tusb_config.h"
 
 #include "disk.h"
-#include "disk_common.h"
+#include "usb_drive.h"
 #include "lcd.h"
-
-// Increase stack size when debug log is enabled
-#define USBD_STACK_SIZE (3 * configMINIMAL_STACK_SIZE / 2) * (CFG_TUSB_DEBUG ? 2 : 1)
 
 static void usb_device_task(void *param);
 static void lcd_task(void* param);
 
-
-#define DISK_BLOCK_NUM 64
+/** @todo Move to FAT */
 static void disk_memory_init();
-static int disk_write(uint32_t block, uint32_t offset, void const* src, uint32_t size);
-static int disk_read(uint32_t block, uint32_t offset, void* dest, uint32_t size);
 
-disk_t disk = {0};
+static lcd_t lcd = {0};
+static uint8_t frame_buffer[LCD_FRAME_SIZE] = {0};
+static disk_t disk = {0};
 
 int main()
 {
 
     stdio_init_all();
 
+	disk.hooks.rwlock_rdlock = NULL;
+	disk.hooks.rwlock_wrlock = NULL;
+	disk.hooks.rwlock_unlock = NULL;
+	disk.callbacks.on_write = NULL;
+	disk_init(&disk);
+	/** @todo move to FAT */
 	disk_memory_init();
 
+	/** Static init of the usb drive */
 	char board_id[PICO_UNIQUE_BOARD_ID_SIZE_BYTES*2+1];
 	pico_get_unique_board_id_string(board_id, sizeof(board_id));
-	strncpy(disk.serial, board_id, sizeof(disk.serial));
-	disk.block_num = DISK_BLOCK_NUM;
-	disk.hooks.disk_read = disk_read;
-	disk.hooks.disk_write = disk_write;
-	
-	disk_init(&disk);
+	board_id[sizeof(board_id)-1] = '\0';
+	usb_drive_init_singleton(board_id, &disk);
 
 	/** Put the usb task to the lowest priority. This task is always busy. */
-    xTaskCreate(usb_device_task, "usbd", USBD_STACK_SIZE, NULL, tskIDLE_PRIORITY + 1, NULL);
+	/** @todo large stack size only for testing, shrink to 1024 */
+    xTaskCreate(usb_device_task, "usbd", 4096, NULL, tskIDLE_PRIORITY + 1, NULL);
 
 	// The lcd task needs to be at a higher priority.
 	xTaskCreate(lcd_task, "lcd", 1024, NULL, configMAX_PRIORITIES - 1, NULL);
@@ -83,8 +83,7 @@ static void usb_device_task(void *param)
     }
 }
 
-static lcd_t lcd;
-static uint8_t frame_buffer[LCD_FRAME_SIZE] = {0};
+
 
 static void lcd_enter_critical_section(void* )
 {
@@ -156,6 +155,7 @@ static void lcd_task(void* )
 	}	
 }
 
+/** @todo Move to FAT */
 
 #define ARRAY_SIZE_AND_CONTENT(...) (sizeof((uint8_t[]){__VA_ARGS__})),(uint8_t[]){__VA_ARGS__}
 const struct
@@ -202,41 +202,11 @@ const struct
 	)}
 };
 
-static uint8_t disk_memory[DISK_BLOCK_NUM*DISK_BLOCK_SIZE] = {0};
-
 static void disk_memory_init()
 {
-	memset(disk_memory, 0, sizeof(disk_memory));
+	memset(disk.mem, 0, sizeof(disk.mem));
 	for(int i = 0; i < sizeof(disk_init_values)/sizeof(disk_init_values[0]); i++)
 	{
-		memcpy(disk_memory + disk_init_values[i].offset, disk_init_values[i].data, disk_init_values[i].length);
+		memcpy(disk.mem + disk_init_values[i].offset, disk_init_values[i].data, disk_init_values[i].length);
 	}
-}
-
-static int disk_write(uint32_t block, uint32_t offset, void const* src, uint32_t size)
-{
-	if(block * DISK_BLOCK_SIZE + offset + size > sizeof(disk_memory))
-	{
-		return -1;
-	}
-	if(offset + size > DISK_BLOCK_SIZE)
-	{
-		return -1;
-	}
-	memcpy(disk_memory + block * DISK_BLOCK_SIZE + offset, src, size);
-	return size;
-}
-
-static int disk_read(uint32_t block, uint32_t offset, void* dest, uint32_t size)
-{
-	if(block * DISK_BLOCK_SIZE + offset + size > sizeof(disk_memory))
-	{
-		return -1;
-	}
-	if(offset + size > DISK_BLOCK_SIZE)
-	{
-		return -1;
-	}
-	memcpy(dest, disk_memory + block * DISK_BLOCK_SIZE + offset, size);
-	return size;
 }

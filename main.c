@@ -27,15 +27,18 @@ int main()
 
     stdio_init_all();
 
-    // board_init();
-    // xTaskCreate(usb_device_task, "usbd", USBD_STACK_SIZE, NULL, configMAX_PRIORITIES - 3, NULL);
+	/** Put the usb task to the lowest priority. This task is always busy. */
+    xTaskCreate(usb_device_task, "usbd", USBD_STACK_SIZE, NULL, tskIDLE_PRIORITY + 1, NULL);
 
-	xTaskCreate(lcd_task, "lcd", 1024, NULL, configMAX_PRIORITIES - 3, NULL);
+	// The lcd task needs to be at a higher priority.
+	xTaskCreate(lcd_task, "lcd", 1024, NULL, configMAX_PRIORITIES - 1, NULL);
 
     vTaskStartScheduler();
 
     for (;;)
-        tight_loop_contents();
+	{
+		tight_loop_contents();
+	}
 
     return 0;
 }
@@ -52,7 +55,7 @@ static void usb_device_task(void *param)
     tud_init(BOARD_TUD_RHPORT);
 
     // RTOS forever loop
-    while (1)
+    for(;;)
     {
         // put this thread to waiting state until there is new events
         tud_task();
@@ -86,13 +89,10 @@ static void lcd_task(void* )
 	lcd.pin_ncs = 5;
 	lcd.pin_dc = 6;
 	lcd.pin_nrst = 7;
-	lcd.options.enable_dma = false;
 	lcd.options.spi_baudrate = 20 * 1000 * 1000;
 	lcd.hooks.enter_critical_section = lcd_enter_critical_section;
 	lcd.hooks.exit_critical_section = lcd_exit_critical_section;
 	lcd.hooks.sleep = lcd_sleep;
-	lcd.hooks.semaphore_take = NULL;
-	lcd.hooks.semaphore_give = NULL;
 	lcd_init(&lcd);
 	for(;;)
 	{

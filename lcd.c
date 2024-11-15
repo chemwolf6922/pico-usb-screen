@@ -1,12 +1,9 @@
 #include "lcd.h"
 #include <hardware/gpio.h>
 
-/** @todo implement the dma path */
-
+static int init_lcd_hardware(lcd_t* lcd);
 static void loop_sleep(uint32_t ms, void* ctx);
 static int send_command(lcd_t* lcd, uint8_t* command_and_data, int size);
-static int init_lcd_hardware(lcd_t* lcd);
-
 
 int lcd_init(lcd_t* lcd)
 {
@@ -20,11 +17,6 @@ int lcd_init(lcd_t* lcd)
     if(lcd->hooks.enter_critical_section || lcd->hooks.exit_critical_section)
     {
         if(!(lcd->hooks.enter_critical_section && lcd->hooks.exit_critical_section))
-            return -1;
-    }
-    if(lcd->options.enable_dma)
-    {
-        if(!(lcd->hooks.semaphore_take && lcd->hooks.semaphore_give))
             return -1;
     }
     if(!lcd->hooks.sleep)
@@ -47,7 +39,6 @@ int lcd_init(lcd_t* lcd)
     gpio_put(lcd->pin_dc, 1);
 
     /** init screen */
-
     if(init_lcd_hardware(lcd) != 0)
     {
         lcd_deinit(lcd);
@@ -113,8 +104,6 @@ int lcd_exit_sleep(lcd_t* lcd)
 #undef SEND_COMMAND_OR_RETURN
 }
 
-
-/** @todo implement dma */
 int lcd_write_frame(lcd_t* lcd, const uint8_t frame[LCD_FRAME_SIZE])
 {
     if(!lcd || !frame)
@@ -130,6 +119,7 @@ int lcd_write_frame(lcd_t* lcd, const uint8_t frame[LCD_FRAME_SIZE])
         rc = -1;
         goto finish;
     }
+
     gpio_put(lcd->pin_dc, 1);
     if(spi_write_blocking(lcd->spi, frame, LCD_FRAME_SIZE) != LCD_FRAME_SIZE)
     {
@@ -139,48 +129,6 @@ int lcd_write_frame(lcd_t* lcd, const uint8_t frame[LCD_FRAME_SIZE])
 
 finish:
     gpio_put(lcd->pin_ncs, 1);
-    if(lcd->hooks.exit_critical_section)
-        lcd->hooks.exit_critical_section(lcd->hooks.critical_section_ctx);
-
-    return rc;
-}
-
-static void loop_sleep(uint32_t ms, void* ctx)
-{
-    sleep_ms(ms);
-}
-
-static int send_command(lcd_t* lcd, uint8_t* command_and_data, int size)
-{
-    if(!lcd || !command_and_data || size < 1)
-        return -1;
-    int rc = 0;
-
-    if(lcd->hooks.enter_critical_section)
-        lcd->hooks.enter_critical_section(lcd->hooks.critical_section_ctx);
-
-    gpio_put(lcd->pin_dc, 0);
-    gpio_put(lcd->pin_ncs, 0);
-
-    if(spi_write_blocking(lcd->spi, command_and_data, 1) != 1)
-    {
-        rc = -1;
-        goto finish;
-    }
-
-    if(size > 1)
-    {
-        gpio_put(lcd->pin_dc, 1);
-        if(spi_write_blocking(lcd->spi, command_and_data+1, size-1) != size-1)
-        {
-            rc = -1;
-            goto finish;
-        }
-    }
-
-finish:
-    gpio_put(lcd->pin_ncs, 1);
-    
     if(lcd->hooks.exit_critical_section)
         lcd->hooks.exit_critical_section(lcd->hooks.critical_section_ctx);
 
@@ -316,4 +264,46 @@ static int init_lcd_hardware(lcd_t* lcd)
     return 0;
 
 #undef SEND_COMMAND_OR_RETURN
+}
+
+static void loop_sleep(uint32_t ms, void* ctx)
+{
+    sleep_ms(ms);
+}
+
+static int send_command(lcd_t* lcd, uint8_t* command_and_data, int size)
+{
+    if(!lcd || !command_and_data || size < 1)
+        return -1;
+    int rc = 0;
+
+    if(lcd->hooks.enter_critical_section)
+        lcd->hooks.enter_critical_section(lcd->hooks.critical_section_ctx);
+
+    gpio_put(lcd->pin_dc, 0);
+    gpio_put(lcd->pin_ncs, 0);
+
+    if(spi_write_blocking(lcd->spi, command_and_data, 1) != 1)
+    {
+        rc = -1;
+        goto finish;
+    }
+
+    if(size > 1)
+    {
+        gpio_put(lcd->pin_dc, 1);
+        if(spi_write_blocking(lcd->spi, command_and_data+1, size-1) != size-1)
+        {
+            rc = -1;
+            goto finish;
+        }
+    }
+
+finish:
+    gpio_put(lcd->pin_ncs, 1);
+    
+    if(lcd->hooks.exit_critical_section)
+        lcd->hooks.exit_critical_section(lcd->hooks.critical_section_ctx);
+
+    return rc;
 }

@@ -3,6 +3,7 @@
 /**
  * This is not a general gc9d01 library as there are too many undocumented commands in the configuration process.
  * This is only for the 1.12 inch 50*160 lcd with the gc9d01 driver.
+ * DMA support was removed as the spi FIFO is too small for dma to be meaningful.
  */
 
 #include <pico/stdlib.h>
@@ -32,14 +33,9 @@ typedef struct
         /** Will use the default loop sleep if this is NULL */
         void (*sleep)(uint32_t ms, void* ctx);
         void* sleep_ctx;
-        /** Required for dma. */
-        void (*semaphore_take)(void* ctx);
-        void (*semaphore_give)(void* ctx);
-        void* semaphore_ctx;
     } hooks;
     struct
     {
-        bool enable_dma;
         int spi_baudrate;
     } options;
 } lcd_t;

@@ -303,8 +303,8 @@ static int init_lcd_hardware(lcd_t* lcd)
     SEND_COMMAND_OR_RETURN(0xBF, 0x00);
     /** Unknown command */
     SEND_COMMAND_OR_RETURN(0xF9, 0x40);
-    /** Memory access control, all normal, RGB pixel @todo change to BGR */
-    SEND_COMMAND_OR_RETURN(0x36, 0x00);
+    /** Memory access control, all normal, BGR pixel */
+    SEND_COMMAND_OR_RETURN(0x36, 0x08);
     /** Column address set, 15 -> 64 */
     SEND_COMMAND_OR_RETURN(0x2A, 0x00, 0x0F, 0x00, 0x40);
     /** Page address set, 0 -> 159 */

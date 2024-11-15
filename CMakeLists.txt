@@ -19,9 +19,7 @@ pico_sdk_init()
 add_executable(usb_screen
         ${CMAKE_CURRENT_LIST_DIR}/main.c
         ${CMAKE_CURRENT_LIST_DIR}/lcd.c
-        ${CMAKE_CURRENT_LIST_DIR}/usb_descriptors.c
-        ${CMAKE_CURRENT_LIST_DIR}/disk_callbacks.c
-        ${CMAKE_CURRENT_LIST_DIR}/freertos_hook.c
+        ${CMAKE_CURRENT_LIST_DIR}/disk.c
         )
 
 # Include freertos

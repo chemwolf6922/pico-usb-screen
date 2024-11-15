@@ -19,7 +19,7 @@ pico_sdk_init()
 add_executable(usb_screen
         ${CMAKE_CURRENT_LIST_DIR}/main.c
         ${CMAKE_CURRENT_LIST_DIR}/usb_descriptors.c
-        ${CMAKE_CURRENT_LIST_DIR}/msc_disk_dual.c
+        ${CMAKE_CURRENT_LIST_DIR}/disk_callbacks.c
         ${CMAKE_CURRENT_LIST_DIR}/freertos_hook.c
         )
 
@@ -44,6 +44,7 @@ pico_enable_stdio_uart(usb_screen 1)
 # pull in common dependencies
 target_link_libraries(usb_screen PUBLIC
         pico_stdlib 
+        hardware_spi
         freertos
         pico_unique_id 
         tinyusb_device 

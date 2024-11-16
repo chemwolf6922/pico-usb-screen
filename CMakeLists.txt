@@ -26,6 +26,14 @@ add_executable(usb_screen
         ${CMAKE_CURRENT_LIST_DIR}/button.c
         )
 
+add_executable(usb_screen_raw
+        ${CMAKE_CURRENT_LIST_DIR}/main_raw.c
+        ${CMAKE_CURRENT_LIST_DIR}/lcd.c
+        ${CMAKE_CURRENT_LIST_DIR}/disk.c
+        ${CMAKE_CURRENT_LIST_DIR}/usb_drive.c
+        ${CMAKE_CURRENT_LIST_DIR}/button.c
+        )
+
 # Include freertos
 set(PICO_FREERTOS_PATH $ENV{PICO_FREERTOS_PATH})
 include(${PICO_FREERTOS_PATH}/CMakeLists.txt)
@@ -40,9 +48,15 @@ add_subdirectory(${PICO_TINYUSB_PATH}/examples/device tinyusb_device_examples)
 target_include_directories(usb_screen PUBLIC
         ${CMAKE_CURRENT_LIST_DIR})
 
+target_include_directories(usb_screen_raw PUBLIC
+        ${CMAKE_CURRENT_LIST_DIR})
+
 # enable usb output, disable uart output
 pico_enable_stdio_usb(usb_screen 0)
 pico_enable_stdio_uart(usb_screen 1)
+
+pico_enable_stdio_usb(usb_screen_raw 0)
+pico_enable_stdio_uart(usb_screen_raw 1)
 
 # pull in common dependencies
 target_link_libraries(usb_screen PUBLIC
@@ -54,8 +68,19 @@ target_link_libraries(usb_screen PUBLIC
         tinyusb_board
         )
 
+target_link_libraries(usb_screen_raw PUBLIC
+        pico_stdlib 
+        pico_unique_id 
+        hardware_spi
+        freertos
+        tinyusb_device 
+        tinyusb_board
+        )
+
 # create map/bin/hex file etc.
 pico_add_extra_outputs(usb_screen)
+
+pico_add_extra_outputs(usb_screen_raw)
 
 add_compile_options(-Wall
         -Wno-format          # int != int32_t as far as the compiler is concerned because gcc has int32_t as long int

@@ -17,8 +17,6 @@
 #include "tusb_config.h"
 
 #include "disk.h"
-#include "fat12.h"
-#include "bmp.h"
 #include "usb_drive.h"
 #include "lcd.h"
 #include "button.h"
@@ -62,7 +60,8 @@ int main()
 	disk.hooks.rwlock_unlock = disk_unlock;
 	disk.callbacks.on_write = on_disk_write;
 	disk_init(&disk);
-	fat12_format(&disk);
+    /** wipe disk */
+    memset(disk.mem, 0, sizeof(disk.mem));
 
 	/** Static init of the usb drive */
 	char board_id[PICO_UNIQUE_BOARD_ID_SIZE_BYTES*2+1];
@@ -209,43 +208,9 @@ static void lcd_task(void* )
 static int read_frame_buffer()
 {
 	disk_lock(NULL);
-	fat12_file_reader_t reader = {0};
-	/** Only read the first file. */
-	if(fat12_open_next_file(&disk, &reader) != 0)
-		goto error;
-	int sector_size = 0;
-	bool bmp_opened = false;
-	bmp_t bmp = {0};
-	int total_read_size = 0;
-	for(;;)
-	{
-		const uint8_t* sector = fat12_read_file_next_sector(&disk, &reader, &sector_size);
-		if(sector == NULL)
-			break;
-		if(!bmp_opened)
-		{
-			if(bmp_open(&bmp, sector, sector_size)!=0)
-				goto error;
-			bmp_opened = true;
-		}
-		int read_size = bmp_read_next(
-			&bmp,
-			sector,
-			sector_size,
-			frame_buffer,
-			sizeof(frame_buffer));
-		if(read_size < 0)
-			goto error;
-		total_read_size += read_size;
-	}
-	/** Only read full frames */
-	if(total_read_size != sizeof(frame_buffer))
-		goto error;
-	disk_unlock(NULL);
+	memcpy(frame_buffer, disk.mem, sizeof(frame_buffer));
+    disk_unlock(NULL);
 	return 0;
-error:
-	disk_unlock(NULL);
-	return -1;
 }
 
 static void button_on_click(void* )

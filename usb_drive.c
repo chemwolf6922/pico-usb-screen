@@ -51,51 +51,6 @@ int usb_drive_init_singleton(const char* serial, disk_t* disk)
     return 0;
 }
 
-//--------------------------------------------------------------------+
-// LUN 0
-//--------------------------------------------------------------------+
-
-/** @todo move to FAT implementation */
-
-// #define EXTENDED_BOOT_SIGNATURE (0x29)
-// #define BOOT_SECTOR_SIGNATURE (0xAA55)
-
-// typedef struct
-// {
-//     uint8_t jmp_boot[3];
-//     char oem_name[8];
-//     uint16_t byte_per_sector;
-//     uint8_t sector_per_cluster;
-//     uint16_t reserved_sectors;
-//     uint8_t fat_num;
-//     uint16_t root_entry_num;
-//     uint16_t sector_num;
-//     uint8_t media_type;
-//     uint16_t sector_per_fat;
-//     uint16_t sector_per_head;
-//     uint16_t heads_per_cylinder;
-//     uint32_t hidden_sectors;
-//     uint32_t sector_num_big;
-//     uint8_t drive_number;
-//     uint8_t reserved;
-//     uint8_t extended_boot_signature;
-//     uint32_t volume_serial_number;
-//     char volume_label[11];
-//     char filesystem_type[8];
-//     uint8_t boot_code[448];
-//     uint16_t boot_sector_signature;
-// } fat_boot_sector_t;
-
-// typedef struct
-// {
-
-// } fat_sector_t;
-
-// typedef struct
-// {
-
-// } root_directory_entry_t;
-
 /** Disk callbacks */
 
 // Invoked to determine max LUN

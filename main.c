@@ -7,6 +7,8 @@
 #include <FreeRTOS.h>
 #include <queue.h>
 #include <task.h>
+#include <timers.h>
+#include <semphr.h>
 
 /** TUSB */
 #include <bsp/board.h>
@@ -15,31 +17,52 @@
 #include "tusb_config.h"
 
 #include "disk.h"
+#include "fat12.h"
+#include "bmp.h"
 #include "usb_drive.h"
 #include "lcd.h"
+#include "button.h"
 
+/** This is ample time */
+#define FILE_WRITE_FINISH_TIMEOUT_MS (30)
+#define FILE_WRITE_FINISH_TIMEOUT_TICK (pdMS_TO_TICKS(FILE_WRITE_FINISH_TIMEOUT_MS))
+
+static void disk_lock(void* );
+static void disk_unlock(void* );
+static void on_disk_write(void* );
+static void disk_write_finish_timer_handler(TimerHandle_t timer);
 static void usb_device_task(void *param);
 static void lcd_task(void* param);
-
-/** @todo Move to FAT */
-static void disk_memory_init();
+static int read_frame_buffer();
+static void button_on_click(void* );
 
 static lcd_t lcd = {0};
 static uint8_t frame_buffer[LCD_FRAME_SIZE] = {0};
 static disk_t disk = {0};
+static button_t button = {0};
+
+static TimerHandle_t disk_write_finish_timer = NULL;
+
+enum
+{
+	LCD_COMMAND_NEW_FRAME,
+	LCD_COMMAND_TOGGLE_SLEEP
+};
+typedef uint32_t lcd_command_t;
+
+static QueueHandle_t lcd_command_queue = NULL;
+static SemaphoreHandle_t disk_mutex = NULL;
 
 int main()
 {
-
     stdio_init_all();
 
-	disk.hooks.rwlock_rdlock = NULL;
-	disk.hooks.rwlock_wrlock = NULL;
-	disk.hooks.rwlock_unlock = NULL;
-	disk.callbacks.on_write = NULL;
+	/** Init disk */
+	disk.hooks.rwlock_wrlock = disk_lock;
+	disk.hooks.rwlock_unlock = disk_unlock;
+	disk.callbacks.on_write = on_disk_write;
 	disk_init(&disk);
-	/** @todo move to FAT */
-	disk_memory_init();
+	fat12_format(&disk);
 
 	/** Static init of the usb drive */
 	char board_id[PICO_UNIQUE_BOARD_ID_SIZE_BYTES*2+1];
@@ -47,12 +70,17 @@ int main()
 	board_id[sizeof(board_id)-1] = '\0';
 	usb_drive_init_singleton(board_id, &disk);
 
+	disk_mutex = xSemaphoreCreateMutex();
+	disk_write_finish_timer = xTimerCreate("diskw", FILE_WRITE_FINISH_TIMEOUT_TICK, pdFALSE, NULL, disk_write_finish_timer_handler);
+	lcd_command_queue = xQueueCreate(10, sizeof(lcd_command_t));
 	/** Put the usb task to the lowest priority. This task is always busy. */
-	/** @todo large stack size only for testing, shrink to 1024 */
-    xTaskCreate(usb_device_task, "usbd", 4096, NULL, tskIDLE_PRIORITY + 1, NULL);
-
+    xTaskCreate(usb_device_task, "usbd", 1024, NULL, tskIDLE_PRIORITY + 1, NULL);
 	// The lcd task needs to be at a higher priority.
 	xTaskCreate(lcd_task, "lcd", 1024, NULL, configMAX_PRIORITIES - 1, NULL);
+
+	button.pin = 8;
+	button.callback.on_click = button_on_click;
+	button_init(&button);
 
     vTaskStartScheduler();
 
@@ -64,12 +92,20 @@ int main()
     return 0;
 }
 
+static void disk_lock(void* )
+{
+	xSemaphoreTake(disk_mutex, portMAX_DELAY);
+}
+
+static void disk_unlock(void* )
+{
+	xSemaphoreGive(disk_mutex);
+}
+
 // USB Device Driver task
 // This top level thread process all usb events and invoke callbacks
-static void usb_device_task(void *param)
+static void usb_device_task(void* )
 {
-    (void)param;
-
     // init device stack on configured roothub port
     // This should be called after scheduler/kernel is started.
     // Otherwise it could cause kernel issue since USB IRQ handler does use RTOS queue API.
@@ -83,7 +119,16 @@ static void usb_device_task(void *param)
     }
 }
 
+static void on_disk_write(void* )
+{
+	xTimerReset(disk_write_finish_timer, FILE_WRITE_FINISH_TIMEOUT_TICK);
+}
 
+static void disk_write_finish_timer_handler(TimerHandle_t )
+{
+	lcd_command_t command = LCD_COMMAND_NEW_FRAME;
+	xQueueSend(lcd_command_queue, &command, 0);
+}
 
 static void lcd_enter_critical_section(void* )
 {
@@ -114,99 +159,99 @@ static void lcd_task(void* )
 	lcd.hooks.exit_critical_section = lcd_exit_critical_section;
 	lcd.hooks.sleep = lcd_sleep;
 	lcd_init(&lcd);
+
+	bool is_sleeping = false;
+	bool new_frame_during_sleep = false;
 	for(;;)
 	{
-		for(int i = 0; i < sizeof(frame_buffer)/3; i++)
+		lcd_command_t command = 0;
+		if(xQueueReceive(lcd_command_queue, &command, portMAX_DELAY) == pdTRUE)
 		{
-			/** B */
-			frame_buffer[i*3] = 0x00;
-			/** G */
-			frame_buffer[i*3+1] = 0x00;
-			/** R */
-			frame_buffer[i*3+2] = 0xFF;
+			switch(command)
+			{
+				case LCD_COMMAND_NEW_FRAME:
+					if(is_sleeping)
+					{
+						new_frame_during_sleep = true;
+					}
+					else
+					{
+						if(read_frame_buffer() == 0)
+						{
+							lcd_write_frame(&lcd, frame_buffer);
+						}
+					}
+					break;
+				case LCD_COMMAND_TOGGLE_SLEEP:
+					is_sleeping = !is_sleeping;
+					if(is_sleeping)
+					{
+						lcd_enter_sleep(&lcd);
+					}
+					else
+					{
+						if(new_frame_during_sleep)
+						{
+							new_frame_during_sleep = false;
+							if(read_frame_buffer() == 0)
+							{
+								lcd_write_frame(&lcd, frame_buffer);
+							}
+						}
+						lcd_exit_sleep(&lcd);
+					}
+					break;
+			}
 		}
-		lcd_write_frame(&lcd, frame_buffer);	
-		vTaskDelay(pdMS_TO_TICKS(1000));
-		for(int i = 0; i < sizeof(frame_buffer)/3; i++)
-		{
-			/** B */
-			frame_buffer[i*3] = 0x00;
-			/** G */
-			frame_buffer[i*3+1] = 0xFF;
-			/** R */
-			frame_buffer[i*3+2] = 0x00;
-		}
-		lcd_write_frame(&lcd, frame_buffer);	
-		vTaskDelay(pdMS_TO_TICKS(1000));
-		/** Test refreshing in sleep */
-		lcd_enter_sleep(&lcd);
-		for(int i = 0; i < sizeof(frame_buffer)/3; i++)
-		{
-			/** B */
-			frame_buffer[i*3] = 0xFF;
-			/** G */
-			frame_buffer[i*3+1] = 0x00;
-			/** R */
-			frame_buffer[i*3+2] = 0x00;
-		}
-		lcd_write_frame(&lcd, frame_buffer);
-		lcd_exit_sleep(&lcd);	
-		vTaskDelay(pdMS_TO_TICKS(1000));
-	}	
+	}
 }
 
-/** @todo Move to FAT */
+/** @todo add lock */
 
-#define ARRAY_SIZE_AND_CONTENT(...) (sizeof((uint8_t[]){__VA_ARGS__})),(uint8_t[]){__VA_ARGS__}
-const struct
+static int read_frame_buffer()
 {
-	int offset;
-	int length;
-	uint8_t* data;
-} disk_init_values[] = {
-	/** Boot sector */
-	{0, ARRAY_SIZE_AND_CONTENT(
-		0xEB, 0x3C, 0x90, 
-        0x4D, 0x53, 0x44, 0x4F, 0x53, 0x35, 0x2E, 0x30, 
-        0x00, 0x02, 
-        0x01, 
-        0x01, 0x00,
-        0x01, 
-        0x10, 0x00, 
-        0x40, 0x00, 
-        0xF8, 
-        0x01, 0x00, 
-        0x01, 0x00, 
-        0x01, 0x00, 
-        0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00, 
-        0x80, 
-        0x00, 
-        0x29, 
-        0x34, 0x12, 0x00, 0x00,  
-         'U',  'S',  'B',  'S',  'C',  'R',  'E',  'E',  'N',  ' ',  ' ', 
-        0x46, 0x41, 0x54, 0x31, 0x32, 0x20, 0x20, 0x20, 
-	)},
-	/** Magic */
-	{510, ARRAY_SIZE_AND_CONTENT(
-		0x55, 0xAA
-	)},
-	/** FAT12 table */
-	{512, ARRAY_SIZE_AND_CONTENT(
-		0xF8, 0xFF, 0xFF,
-	)},
-	/** Volume label */
-	{1024, ARRAY_SIZE_AND_CONTENT(
-        'U', 'S', 'B', 'S', 'C', 'R', 'E', 'E', 'N', ' ', ' ', 0x08, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x4F, 0x6D, 0x65, 0x43, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-	)}
-};
-
-static void disk_memory_init()
-{
-	memset(disk.mem, 0, sizeof(disk.mem));
-	for(int i = 0; i < sizeof(disk_init_values)/sizeof(disk_init_values[0]); i++)
+	disk_lock(NULL);
+	fat12_file_reader_t reader = {0};
+	/** Only read the first file. */
+	if(fat12_open_next_file(&disk, &reader) != 0)
+		goto error;
+	int sector_size = 0;
+	bool bmp_opened = false;
+	bmp_t bmp = {0};
+	int total_read_size = 0;
+	for(;;)
 	{
-		memcpy(disk.mem + disk_init_values[i].offset, disk_init_values[i].data, disk_init_values[i].length);
+		const uint8_t* sector = fat12_read_file_next_sector(&disk, &reader, &sector_size);
+		if(sector == NULL)
+			break;
+		if(!bmp_opened)
+		{
+			if(bmp_open(&bmp, sector, sector_size)!=0)
+				goto error;
+			bmp_opened = true;
+		}
+		int read_size = bmp_read_next(
+			&bmp,
+			sector,
+			sector_size,
+			frame_buffer,
+			sizeof(frame_buffer));
+		if(read_size < 0)
+			goto error;
+		total_read_size += read_size;
 	}
+	/** Only read full frames */
+	if(total_read_size != sizeof(frame_buffer))
+		goto error;
+	disk_unlock(NULL);
+	return 0;
+error:
+	disk_unlock(NULL);
+	return -1;
+}
+
+static void button_on_click(void* )
+{
+	lcd_command_t command = LCD_COMMAND_TOGGLE_SLEEP;
+	xQueueSend(lcd_command_queue, &command, 0);
 }

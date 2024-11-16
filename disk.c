@@ -7,9 +7,9 @@ int disk_init(disk_t* disk)
 {
     if(!disk)
         return -1;
-    if(disk->hooks.rwlock_rdlock || disk->hooks.rwlock_wrlock || disk->hooks.rwlock_unlock)
+    if(disk->hooks.rwlock_wrlock || disk->hooks.rwlock_unlock)
     {
-        if(!disk->hooks.rwlock_rdlock || !disk->hooks.rwlock_wrlock || !disk->hooks.rwlock_unlock)
+        if(!disk->hooks.rwlock_wrlock || !disk->hooks.rwlock_unlock)
             return -1;
     }
     return 0;
@@ -48,12 +48,6 @@ int disk_read(disk_t* disk, uint32_t block, uint32_t offset, void* dest, uint32_
 	{
 		return -1;
 	}
-    if(disk->hooks.rwlock_rdlock)
-        disk->hooks.rwlock_rdlock(disk->hooks.rwlock_ctx);
-
 	memcpy(dest, disk->mem + block * DISK_BLOCK_SIZE + offset, size);
-
-    if(disk->hooks.rwlock_unlock)
-        disk->hooks.rwlock_unlock(disk->hooks.rwlock_ctx);
 	return size;
 }

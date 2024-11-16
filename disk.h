@@ -7,7 +7,7 @@
 
 typedef struct
 {
-    uint8_t mem[DISK_BLOCK_NUM * DISK_BLOCK_SIZE];
+    uint8_t mem[DISK_BLOCK_NUM * DISK_BLOCK_SIZE] __attribute__((aligned(4)));
     struct
     {
         /** DO NOT put a lot of logic in this! */
@@ -16,7 +16,11 @@ typedef struct
     } callbacks;
     struct
     {
-        void (*rwlock_rdlock)(void* ctx);
+        /** 
+         * The disk itself only locks on write.
+         * Since the read may across multiple blocks,
+         * you should manage the read lock by yourself.
+         */
         void (*rwlock_wrlock)(void* ctx);
         void (*rwlock_unlock)(void* ctx);
         void* rwlock_ctx;

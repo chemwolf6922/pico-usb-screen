@@ -20,7 +20,10 @@ add_executable(usb_screen
         ${CMAKE_CURRENT_LIST_DIR}/main.c
         ${CMAKE_CURRENT_LIST_DIR}/lcd.c
         ${CMAKE_CURRENT_LIST_DIR}/disk.c
+        ${CMAKE_CURRENT_LIST_DIR}/fat12.c
+        ${CMAKE_CURRENT_LIST_DIR}/bmp.c
         ${CMAKE_CURRENT_LIST_DIR}/usb_drive.c
+        ${CMAKE_CURRENT_LIST_DIR}/button.c
         )
 
 # Include freertos
@@ -44,9 +47,9 @@ pico_enable_stdio_uart(usb_screen 1)
 # pull in common dependencies
 target_link_libraries(usb_screen PUBLIC
         pico_stdlib 
+        pico_unique_id 
         hardware_spi
         freertos
-        pico_unique_id 
         tinyusb_device 
         tinyusb_board
         )

@@ -26,7 +26,7 @@ int lcd_init(lcd_t* lcd)
 
     /** init peripherals */
     gpio_set_function(lcd->pin_clk, GPIO_FUNC_SPI);
-    gpio_set_function(lcd->pin_miso, GPIO_FUNC_SPI);
+    gpio_set_function(lcd->pin_mosi, GPIO_FUNC_SPI);
     spi_init(lcd->spi, lcd->options.spi_baudrate);
     gpio_init(lcd->pin_ncs);
     gpio_set_dir(lcd->pin_ncs, GPIO_OUT);
@@ -52,7 +52,7 @@ void lcd_deinit(lcd_t* lcd)
 {
     spi_deinit(lcd->spi);
     gpio_set_function(lcd->pin_clk, GPIO_FUNC_NULL);
-    gpio_set_function(lcd->pin_miso, GPIO_FUNC_NULL);
+    gpio_set_function(lcd->pin_mosi, GPIO_FUNC_NULL);
     gpio_set_function(lcd->pin_ncs, GPIO_FUNC_NULL);
     gpio_set_function(lcd->pin_nrst, GPIO_FUNC_NULL);
     gpio_set_function(lcd->pin_dc, GPIO_FUNC_NULL);

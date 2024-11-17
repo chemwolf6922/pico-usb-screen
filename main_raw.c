@@ -142,7 +142,7 @@ static void lcd_task(void* )
 	memset(&lcd, 0, sizeof(lcd_t));
 	lcd.spi = spi0;
 	lcd.pin_clk = 2;
-	lcd.pin_miso = 3;
+	lcd.pin_mosi = 3;
 	lcd.pin_ncs = 5;
 	lcd.pin_dc = 6;
 	lcd.pin_nrst = 7;

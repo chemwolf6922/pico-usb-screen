@@ -18,7 +18,7 @@ typedef struct
 {
     spi_inst_t* spi;
     int pin_clk;
-    int pin_miso;
+    int pin_mosi;
     int pin_ncs;
     int pin_dc;
     int pin_nrst;

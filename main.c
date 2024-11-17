@@ -150,10 +150,10 @@ static void lcd_task(void* )
 	memset(&lcd, 0, sizeof(lcd_t));
 	lcd.spi = spi0;
 	lcd.pin_clk = 2;
-	lcd.pin_miso = 3;
-	lcd.pin_ncs = 5;
-	lcd.pin_dc = 6;
-	lcd.pin_nrst = 7;
+	lcd.pin_mosi = 3;
+	lcd.pin_ncs = 7;
+	lcd.pin_dc = 5;
+	lcd.pin_nrst = 6;
 	lcd.options.spi_baudrate = 20 * 1000 * 1000;
 	lcd.hooks.enter_critical_section = lcd_enter_critical_section;
 	lcd.hooks.exit_critical_section = lcd_exit_critical_section;

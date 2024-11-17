@@ -34,7 +34,7 @@ int disk_write(disk_t* disk, uint32_t block, uint32_t offset, void const* src, u
         disk->hooks.rwlock_unlock(disk->hooks.rwlock_ctx);
 
     if(disk->callbacks.on_write)
-        disk->callbacks.on_write(disk->callbacks.on_write_ctx);
+        disk->callbacks.on_write(block, disk->callbacks.on_write_ctx);
 	return size;
 }
 

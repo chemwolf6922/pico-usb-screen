@@ -63,10 +63,10 @@ uint8_t tud_msc_get_maxlun_cb(void)
 // Application fill vendor id, product id and revision with string up to 8, 16, 4 characters respectively
 void tud_msc_inquiry_cb(uint8_t lun, uint8_t vendor_id[8], uint8_t product_id[16], uint8_t product_rev[4])
 {
-    (void)lun; // use same ID for both LUNs
+    (void)lun;
 
     const char vid[] = USB_MANUFACTURER;
-    const char pid[] = "Mass Storage";
+    const char pid[] = "USB Screen";
     const char rev[] = "1.0";
 
     memcpy(vendor_id, vid, strlen(vid));

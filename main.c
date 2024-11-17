@@ -29,7 +29,7 @@
 
 static void disk_lock(void* );
 static void disk_unlock(void* );
-static void on_disk_write(void* );
+static void on_disk_write(uint32_t , void* );
 static void disk_write_finish_timer_handler(TimerHandle_t timer);
 static void usb_device_task(void *param);
 static void lcd_task(void* param);
@@ -119,7 +119,7 @@ static void usb_device_task(void* )
     }
 }
 
-static void on_disk_write(void* )
+static void on_disk_write(uint32_t , void* )
 {
 	xTimerReset(disk_write_finish_timer, FILE_WRITE_FINISH_TIMEOUT_TICK);
 }

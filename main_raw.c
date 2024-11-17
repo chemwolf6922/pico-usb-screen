@@ -27,19 +27,14 @@
 
 static void disk_lock(void* );
 static void disk_unlock(void* );
-static void on_disk_write(void* );
-static void disk_write_finish_timer_handler(TimerHandle_t timer);
+static void on_disk_write(uint32_t block, void* );
 static void usb_device_task(void *param);
 static void lcd_task(void* param);
-static int read_frame_buffer();
 static void button_on_click(void* );
 
 static lcd_t lcd = {0};
-static uint8_t frame_buffer[LCD_FRAME_SIZE] = {0};
 static disk_t disk = {0};
 static button_t button = {0};
-
-static TimerHandle_t disk_write_finish_timer = NULL;
 
 enum
 {
@@ -70,7 +65,6 @@ int main()
 	usb_drive_init_singleton(board_id, &disk);
 
 	disk_mutex = xSemaphoreCreateMutex();
-	disk_write_finish_timer = xTimerCreate("diskw", FILE_WRITE_FINISH_TIMEOUT_TICK, pdFALSE, NULL, disk_write_finish_timer_handler);
 	lcd_command_queue = xQueueCreate(10, sizeof(lcd_command_t));
 	/** Put the usb task to the lowest priority. This task is always busy. */
     xTaskCreate(usb_device_task, "usbd", 1024, NULL, tskIDLE_PRIORITY + 1, NULL);
@@ -118,15 +112,14 @@ static void usb_device_task(void* )
     }
 }
 
-static void on_disk_write(void* )
+static void on_disk_write(uint32_t block, void* )
 {
-	xTimerReset(disk_write_finish_timer, FILE_WRITE_FINISH_TIMEOUT_TICK);
-}
-
-static void disk_write_finish_timer_handler(TimerHandle_t )
-{
-	lcd_command_t command = LCD_COMMAND_NEW_FRAME;
-	xQueueSend(lcd_command_queue, &command, 0);
+	/** Raw mode, use write to last block as trigger */
+	if(block == LCD_FRAME_SIZE / DISK_BLOCK_SIZE)
+	{
+		lcd_command_t command = LCD_COMMAND_NEW_FRAME;
+		xQueueSend(lcd_command_queue, &command, 0);
+	}
 }
 
 static void lcd_enter_critical_section(void* )
@@ -175,10 +168,10 @@ static void lcd_task(void* )
 					}
 					else
 					{
-						if(read_frame_buffer() == 0)
-						{
-							lcd_write_frame(&lcd, frame_buffer);
-						}
+						/** Raw mode, access the disk directly */
+						disk_lock(NULL);
+						lcd_write_frame(&lcd, disk.mem);
+						disk_unlock(NULL);
 					}
 					break;
 				case LCD_COMMAND_TOGGLE_SLEEP:
@@ -192,10 +185,10 @@ static void lcd_task(void* )
 						if(new_frame_during_sleep)
 						{
 							new_frame_during_sleep = false;
-							if(read_frame_buffer() == 0)
-							{
-								lcd_write_frame(&lcd, frame_buffer);
-							}
+							/** Raw mode, access the disk directly */
+							disk_lock(NULL);
+							lcd_write_frame(&lcd, disk.mem);
+							disk_unlock(NULL);
 						}
 						lcd_exit_sleep(&lcd);
 					}
@@ -203,14 +196,6 @@ static void lcd_task(void* )
 			}
 		}
 	}
-}
-
-static int read_frame_buffer()
-{
-	disk_lock(NULL);
-	memcpy(frame_buffer, disk.mem, sizeof(frame_buffer));
-    disk_unlock(NULL);
-	return 0;
 }
 
 static void button_on_click(void* )

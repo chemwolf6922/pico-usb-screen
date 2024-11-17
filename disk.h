@@ -11,7 +11,7 @@ typedef struct
     struct
     {
         /** DO NOT put a lot of logic in this! */
-        void (*on_write)(void* ctx);
+        void (*on_write)(uint32_t block, void* ctx);
         void* on_write_ctx;
     } callbacks;
     struct
